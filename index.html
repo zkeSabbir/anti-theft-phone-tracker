@@ -611,34 +611,23 @@
             }
         }
 
-        // --- P2P Direct Cloud Connection to Mobile (No Python Server Needed!) ---
-        var peer = new Peer('aegis-dashboard-master-host');
-        var mobileConn = null;
-
-        peer.on('open', function(id) {
-            console.log("Dashboard Master P2P ready:", id);
-            // মোবাইলের সাথে কানেক্ট করার চেষ্টা
-            connectToMobileDevice();
+        // --- Global Real-time Cloud Telemetry (MQTT WebSockets) ---
+        var mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+        mqttClient.on('connect', function() {
+            console.log("Dashboard connected to Global MQTT Cloud Broker!");
+            document.querySelector('.status-badge span:last-child').innerText = "CLOUD LINKED";
+            mqttClient.subscribe('aegis/telemetry/zkeSabbir');
         });
 
-        function connectToMobileDevice() {
-            var conn = peer.connect('aegis-mobile-phone-device');
-            conn.on('open', function() {
-                mobileConn = conn;
-                console.log("Connected directly to Honor mobile!");
-                document.querySelector('.status-badge span:last-child').innerText = "LIVE P2P PHONE";
-            });
-            conn.on('data', function(data) {
-                console.log("Live Phone Telemetry Received:", data);
+        mqttClient.on('message', function(topic, message) {
+            try {
+                var data = JSON.parse(message.toString());
+                console.log("⚡ Live Telemetry Received from Mobile:", data);
                 handleLivePhoneData(data);
-            });
-        }
-
-        setInterval(function() {
-            if (!mobileConn || !mobileConn.open) {
-                connectToMobileDevice();
+            } catch(e) {
+                console.error("MQTT Parse error:", e);
             }
-        }, 5000);
+        });
 
         function handleLivePhoneData(data) {
             var customLog = {
@@ -649,30 +638,23 @@
                 charging: data.charging,
                 timestamp: data.timestamp,
                 event_type: data.event_type,
+                photo_filename: data.photo_data ? 'data:image/jpeg;base64,' + data.photo_data : null,
                 photo_data: data.photo_data
             };
             var current = [customLog].concat(defaultTelemetry);
             renderLogs(current);
             if (data.lat && data.lon) {
-                map.flyTo([data.lat, data.lon], 17);
+                map.flyTo([data.lat, data.lon], 17, { duration: 1.5 });
             }
         }
 
         function triggerCommand(cmd) {
-            if (mobileConn && mobileConn.open) {
-                mobileConn.send({command: cmd});
-                alert(`🚀 DIRECT COMMAND SENT TO PHONE: ${cmd}`);
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish('aegis/commands/zkeSabbir', JSON.stringify({command: cmd}));
+                alert(`🚀 PROTOCOL SENT TO PHONE: ${cmd}`);
                 return;
             }
-            var endpoint = (API_BASE_URL || '') + '/api/command';
-            fetch(endpoint, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({command: cmd})
-            })
-            .then(r => r.json())
-            .then(data => alert(`🚀 DISPATCHED: ${cmd}`))
-            .catch(() => alert(`Command ${cmd} queued.`));
+            alert(`Command ${cmd} queued.`);
         }
 
         function openModal(src) {

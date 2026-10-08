@@ -62,30 +62,23 @@
             box.style.color = isErr ? '#fb7185' : '#34d399';
         }
 
-        // P2P ক্লাউড কানেকশন (কোনো পাইথন সার্ভার ছাড়াই সরাসরি Netlify-র সাথে যুক্ত হবে!)
-        function initP2P() {
-            peer = new Peer('aegis-mobile-phone-device');
+    <!-- MQTT for 100% reliable real-time cloud sync across devices -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        var mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+        mqttClient.on('connect', function() {
+            console.log("MQTT Cloud Connected!");
+            setStatus("🌐 গ্লোবাল ক্লাউড সিঙ্ক সফল! Netlify-র সাথে লাইভ কানেক্টেড।");
+            mqttClient.subscribe('aegis/commands/zkeSabbir');
+        });
 
-            peer.on('open', function(id) {
-                setStatus("📡 ক্লাউড নেটওয়ার্কে সংযুক্ত! Peer ID: " + id);
-            });
-
-            peer.on('connection', function(c) {
-                conn = c;
-                setStatus("✅ Netlify ড্যাশবোর্ডের সাথে লাইভ কানেক্টেড!");
-
-                conn.on('data', function(data) {
-                    if (data.command === 'SIREN') playSirenAlarm();
-                    if (data.command === 'FAKEOFF') triggerFakeShutdown();
-                });
-            });
-
-            peer.on('error', function(err) {
-                console.log("Peer error:", err);
-            });
-        }
-
-        initP2P();
+        mqttClient.on('message', function(topic, message) {
+            try {
+                var d = JSON.parse(message.toString());
+                if (d.command === 'SIREN') playSirenAlarm();
+                if (d.command === 'FAKEOFF') triggerFakeShutdown();
+            } catch(e) {}
+        });
 
         function sendTelemetry(lat, lon, speed, photoBase64, eventType) {
             var payload = {
@@ -99,14 +92,12 @@
                 photo_data: photoBase64
             };
 
-            // ১. যদি P2P কানেক্টেড থাকে
-            if (conn && conn.open) {
-                conn.send(payload);
-                setStatus("🚀 Netlify-তে লাইভ টেলিম্যাট্রিক্স পাঠানো হয়েছে!");
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish('aegis/telemetry/zkeSabbir', JSON.stringify(payload));
+                setStatus("🚀 ক্লাউডে লাইভ পাঠানো হয়েছে! (Lat: " + Number(lat).toFixed(4) + ", Lon: " + Number(lon).toFixed(4) + ")");
+            } else {
+                setStatus("📍 GPS পাওয়া গেছে! ক্লাউড পুনরায় সংযুক্ত হচ্ছে...");
             }
-
-            // ২. ক্লাউড ফলব্যাক (Local Storage Sync)
-            localStorage.setItem('LATEST_PHONE_TELEMETRY', JSON.stringify(payload));
         }
 
         function startBroadcasting() {
