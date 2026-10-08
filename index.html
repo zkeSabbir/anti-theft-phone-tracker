@@ -9,9 +9,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <!-- Leaflet Map -->
+    <!-- Leaflet Map & PeerJS P2P Cloud Sync -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         :root {
             --bg-base: #06080F;
@@ -610,7 +611,59 @@
             }
         }
 
+        // --- P2P Direct Cloud Connection to Mobile (No Python Server Needed!) ---
+        var peer = new Peer('aegis-dashboard-master-host');
+        var mobileConn = null;
+
+        peer.on('open', function(id) {
+            console.log("Dashboard Master P2P ready:", id);
+            // মোবাইলের সাথে কানেক্ট করার চেষ্টা
+            connectToMobileDevice();
+        });
+
+        function connectToMobileDevice() {
+            var conn = peer.connect('aegis-mobile-phone-device');
+            conn.on('open', function() {
+                mobileConn = conn;
+                console.log("Connected directly to Honor mobile!");
+                document.querySelector('.status-badge span:last-child').innerText = "LIVE P2P PHONE";
+            });
+            conn.on('data', function(data) {
+                console.log("Live Phone Telemetry Received:", data);
+                handleLivePhoneData(data);
+            });
+        }
+
+        setInterval(function() {
+            if (!mobileConn || !mobileConn.open) {
+                connectToMobileDevice();
+            }
+        }, 5000);
+
+        function handleLivePhoneData(data) {
+            var customLog = {
+                lat: data.lat,
+                lon: data.lon,
+                speed: data.speed,
+                battery: data.battery,
+                charging: data.charging,
+                timestamp: data.timestamp,
+                event_type: data.event_type,
+                photo_data: data.photo_data
+            };
+            var current = [customLog].concat(defaultTelemetry);
+            renderLogs(current);
+            if (data.lat && data.lon) {
+                map.flyTo([data.lat, data.lon], 17);
+            }
+        }
+
         function triggerCommand(cmd) {
+            if (mobileConn && mobileConn.open) {
+                mobileConn.send({command: cmd});
+                alert(`🚀 DIRECT COMMAND SENT TO PHONE: ${cmd}`);
+                return;
+            }
             var endpoint = (API_BASE_URL || '') + '/api/command';
             fetch(endpoint, {
                 method: 'POST',

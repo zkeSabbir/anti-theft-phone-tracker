@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AegisGuard Mobile Transmitter</title>
+    <!-- PeerJS for direct P2P connection to Netlify Dashboard without any server! -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { background: #06080F; color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; text-align: center; padding: 30px 16px; margin: 0; }
+        .card { background: rgba(14, 20, 36, 0.85); border-radius: 18px; padding: 24px; border: 1px solid rgba(255,255,255,0.1); max-width: 400px; margin: 0 auto; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+        h1 { color: #38bdf8; font-size: 1.3rem; margin-bottom: 8px; font-weight: 800; }
+        p { color: #94a3b8; font-size: 0.85rem; line-height: 1.5; margin-bottom: 24px; }
+        .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 0.95rem; font-weight: 700; cursor: pointer; margin-bottom: 12px; transition: transform 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: linear-gradient(135deg, #0284c7, #38bdf8); color: white; box-shadow: 0 4px 20px rgba(56,189,248,0.3); }
+        .btn-danger { background: linear-gradient(135deg, #e11d48, #f43f5e); color: white; box-shadow: 0 4px 20px rgba(244,63,94,0.3); }
+        .btn-warning { background: #f59e0b; color: #000; font-weight: 800; }
+        #status-box { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; margin-top: 18px; font-size: 0.82rem; font-family: monospace; color: #34d399; }
+        #fakeBlackScreen { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:99999; flex-direction:column; align-items:center; justify-content:center; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>🛡️ AegisGuard Cloud Guard</h1>
+        <p>সরাসরি আপনার মোবাইল থেকে Netlify ড্যাশবোর্ডে লাইভ জিপিএস ও সেলফি পুশ করুন।</p>
+
+        <button class="btn btn-primary" onclick="startBroadcasting()">📡 ১. লাইভ ক্লাউড GPS ট্র্যাকিং শুরু</button>
+        <button class="btn btn-danger" onclick="snapIntruderPhoto()">📸 ২. ইন্ট্রুডার সেলফি পাঠান</button>
+        <button class="btn btn-warning" onclick="triggerFakeShutdown()">🌑 ৩. ফেক শাটডাউন টেস্ট</button>
+
+        <input type="file" id="camInput" accept="image/*" capture="user" style="display:none;" onchange="uploadDirectPhoto(this)">
+
+        <div id="status-box">স্ট্যাটাস: সংযোগের জন্য প্রস্তুত...</div>
+    </div>
+
+    <!-- ফেক শাটডাউন ফুল স্ক্রিন ব্ল্যাক -->
+    <div id="fakeBlackScreen" onclick="handleWakeTap()">
+        <p style="color:#111; font-size:0.75rem;">[Fake Shutdown Active] ওয়েক-আপ করতে ৩ বার ট্যাপ করুন</p>
+    </div>
+
+    <script>
+        var peer = null;
+        var conn = null;
+        var batteryLevel = 85;
+        var isCharging = false;
+        var watchId = null;
+
+        // ব্যাটারি রিড
+        if ('getBattery' in navigator) {
+            navigator.getBattery().then(function(b) {
+                batteryLevel = Math.round(b.level * 100);
+                isCharging = b.charging;
+            });
+        }
+
+        function setStatus(msg, isErr) {
+            var box = document.getElementById('status-box');
+            box.innerText = msg;
+            box.style.color = isErr ? '#fb7185' : '#34d399';
+        }
+
+        // P2P ক্লাউড কানেকশন (কোনো পাইথন সার্ভার ছাড়াই সরাসরি Netlify-র সাথে যুক্ত হবে!)
+        function initP2P() {
+            peer = new Peer('aegis-mobile-phone-device');
+
+            peer.on('open', function(id) {
+                setStatus("📡 ক্লাউড নেটওয়ার্কে সংযুক্ত! Peer ID: " + id);
+            });
+
+            peer.on('connection', function(c) {
+                conn = c;
+                setStatus("✅ Netlify ড্যাশবোর্ডের সাথে লাইভ কানেক্টেড!");
+
+                conn.on('data', function(data) {
+                    if (data.command === 'SIREN') playSirenAlarm();
+                    if (data.command === 'FAKEOFF') triggerFakeShutdown();
+                });
+            });
+
+            peer.on('error', function(err) {
+                console.log("Peer error:", err);
+            });
+        }
+
+        initP2P();
+
+        function sendTelemetry(lat, lon, speed, photoBase64, eventType) {
+            var payload = {
+                lat: lat,
+                lon: lon,
+                speed: speed || 0,
+                battery: batteryLevel,
+                charging: isCharging,
+                timestamp: new Date().toLocaleTimeString(),
+                event_type: eventType,
+                photo_data: photoBase64
+            };
+
+            // ১. যদি P2P কানেক্টেড থাকে
+            if (conn && conn.open) {
+                conn.send(payload);
+                setStatus("🚀 Netlify-তে লাইভ টেলিম্যাট্রিক্স পাঠানো হয়েছে!");
+            }
+
+            // ২. ক্লাউড ফলব্যাক (Local Storage Sync)
+            localStorage.setItem('LATEST_PHONE_TELEMETRY', JSON.stringify(payload));
+        }
+
+        function startBroadcasting() {
+            if (!navigator.geolocation) {
+                setStatus("GPS সাপোর্ট করছে না", true);
+                return;
+            }
+
+            setStatus("📍 স্যাটেলাইট GPS ট্র্যাকিং শুরু হচ্ছে...");
+            navigator.geolocation.watchPosition(function(pos) {
+                var lat = pos.coords.latitude;
+                var lon = pos.coords.longitude;
+                var speed = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0;
+                setStatus("📍 লাইভ জিপিএস লক: " + lat.toFixed(5) + ", " + lon.toFixed(5));
+                sendTelemetry(lat, lon, speed, null, "LIVE_GPS");
+            }, function(err) {
+                setStatus("GPS এরর: " + err.message, true);
+            }, { enableHighAccuracy: true });
+        }
+
+        function snapIntruderPhoto() {
+            document.getElementById('camInput').click();
+        }
+
+        function uploadDirectPhoto(input) {
+            if (input.files && input.files[0]) {
+                var file = input.files[0];
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var base64 = e.target.result;
+                    navigator.geolocation.getCurrentPosition(function(pos) {
+                        sendTelemetry(pos.coords.latitude, pos.coords.longitude, 0, base64, "WRONG_PIN");
+                        setStatus("🚨 চোরের সেলফি ও জিপিএস Netlify-তে পাঠানো হয়েছে!");
+                    }, function() {
+                        sendTelemetry(23.8103, 90.4125, 0, base64, "WRONG_PIN");
+                        setStatus("🚨 সেলফি Netlify-তে পাঠানো হয়েছে!");
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        var wakeTaps = 0;
+        function triggerFakeShutdown() {
+            document.getElementById('fakeBlackScreen').style.display = 'flex';
+        }
+
+        function handleWakeTap() {
+            wakeTaps++;
+            if (wakeTaps >= 3) {
+                document.getElementById('fakeBlackScreen').style.display = 'none';
+                wakeTaps = 0;
+                setStatus("✨ আসল মালিকের সিক্রেট ট্যাপে ওয়েক-আপ হয়েছে!");
+            }
+        }
+
+        function playSirenAlarm() {
+            try {
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                var osc = ctx.createOscillator();
+                var g = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(900, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1600, ctx.currentTime + 0.4);
+                g.gain.setValueAtTime(1, ctx.currentTime);
+                osc.connect(g);
+                g.connect(ctx.destination);
+                osc.start();
+                setTimeout(() => { osc.stop(); ctx.close(); }, 3500);
+            } catch(e) {}
+        }
+    </script>
+</body>
+</html>
