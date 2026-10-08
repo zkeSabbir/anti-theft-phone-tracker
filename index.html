@@ -547,16 +547,17 @@
             attribution: '&copy; OpenStreetMap'
         });
 
-        // Alidade Smooth Dark - Crisp Cyber Theme without watermark
-        var cyberDarkLayer = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+        // Official Stadia Alidade Smooth Dark Map with your licensed API Key
+        var STADIA_KEY = 'd69eeb4f-d4c2-4827-a9dd-41c689bc6f60';
+        var cyberDarkLayer = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=' + STADIA_KEY, {
             maxZoom: 20,
-            attribution: '&copy; Stadia Maps'
+            attribution: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap'
         });
 
-        // Esri Satellite View (100% Free & High Resolution)
+        // Esri Satellite View (High Resolution Imagery)
         var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
-            attribution: '&copy; Esri'
+            attribution: '&copy; Esri &copy; Maxar &copy; Earthstar'
         });
 
         cyberDarkLayer.addTo(map);
