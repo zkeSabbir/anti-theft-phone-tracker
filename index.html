@@ -539,25 +539,36 @@
         var map = L.map('map', { zoomControl: false }).setView([23.8103, 90.4125], 14);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        // Free Dark Cyber Map (Stadia Alidade Smooth Dark / OpenStreetMap without API Key watermark)
+        var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
             maxZoom: 19,
             subdomains: 'abcd',
-            attribution: '&copy; CartoDB'
-        }).addTo(map);
-
-        var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 19
+            attribution: '&copy; OpenStreetMap'
         });
+
+        // Alidade Smooth Dark - Crisp Cyber Theme without watermark
+        var cyberDarkLayer = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20,
+            attribution: '&copy; Stadia Maps'
+        });
+
+        // Esri Satellite View (100% Free & High Resolution)
+        var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: '&copy; Esri'
+        });
+
+        cyberDarkLayer.addTo(map);
 
         function setMapTheme(theme) {
             document.getElementById('btn-dark').classList.remove('active');
             document.getElementById('btn-sat').classList.remove('active');
             if (theme === 'dark') {
                 map.removeLayer(satLayer);
-                darkLayer.addTo(map);
+                cyberDarkLayer.addTo(map);
                 document.getElementById('btn-dark').classList.add('active');
             } else {
-                map.removeLayer(darkLayer);
+                map.removeLayer(cyberDarkLayer);
                 satLayer.addTo(map);
                 document.getElementById('btn-sat').classList.add('active');
             }
