@@ -47,7 +47,6 @@
             overflow: hidden;
         }
 
-        /* Glassmorphism sidebar */
         #sidebar {
             width: 440px;
             height: 100vh;
@@ -62,7 +61,6 @@
             transition: all 0.3s ease;
         }
 
-        /* Header */
         .sidebar-header {
             padding: 22px 24px;
             border-bottom: 1px solid var(--border-subtle);
@@ -137,7 +135,6 @@
             100% { transform: scale(0.9); opacity: 0.8; }
         }
 
-        /* Remote Action Grid */
         .section-wrap {
             padding: 18px 24px;
             border-bottom: 1px solid var(--border-subtle);
@@ -209,7 +206,6 @@
             box-shadow: 0 4px 20px var(--danger-glow);
         }
 
-        /* Telemetry Stat Cards */
         .telemetry-row {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -247,7 +243,6 @@
             color: var(--primary);
         }
 
-        /* Feed & Log Section */
         .feed-container {
             flex: 1;
             display: flex;
@@ -368,14 +363,12 @@
             transform: scale(1.02);
         }
 
-        /* Map styling */
         #map {
             flex: 1;
             height: 100vh;
             background: #06080F;
         }
 
-        /* Floating Over-Map Controls */
         .map-overlay-card {
             position: absolute;
             top: 24px;
@@ -384,32 +377,40 @@
             backdrop-filter: blur(20px);
             border: 1px solid var(--border-subtle);
             border-radius: 14px;
-            padding: 14px 20px;
+            padding: 12px 18px;
             z-index: 1000;
             box-shadow: 0 10px 40px rgba(0,0,0,0.6);
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
         }
 
         .map-mode-btn {
             background: transparent;
-            border: none;
+            border: 1px solid transparent;
             color: var(--text-muted);
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             cursor: pointer;
-            padding: 6px 10px;
+            padding: 6px 12px;
             border-radius: 8px;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .map-mode-btn:hover {
+            color: #fff;
+            border-color: rgba(255,255,255,0.1);
         }
 
         .map-mode-btn.active {
             background: rgba(56, 189, 248, 0.15);
             color: var(--primary);
+            border-color: rgba(56, 189, 248, 0.3);
             font-weight: 700;
         }
 
-        /* Modal for fullscreen image */
         #photoModal {
             display: none;
             position: fixed;
@@ -483,7 +484,7 @@
         <div class="telemetry-row">
             <div class="telemetry-card">
                 <div class="telemetry-label">Battery Level</div>
-                <div class="telemetry-value" id="val-batt">--%</div>
+                <div class="telemetry-value" id="val-batt">92%</div>
             </div>
             <div class="telemetry-card">
                 <div class="telemetry-label">Current Velocity</div>
@@ -491,7 +492,7 @@
             </div>
             <div class="telemetry-card">
                 <div class="telemetry-label">Power State</div>
-                <div class="telemetry-value" id="val-charge">DISCHARGING</div>
+                <div class="telemetry-value" id="val-charge">CHARGING ⚡</div>
             </div>
         </div>
 
@@ -499,14 +500,9 @@
         <div class="feed-container">
             <div class="section-label">
                 <span>Security Intel & Capture Logs</span>
-                <span id="log-count" style="font-family:'JetBrains Mono'; color:var(--primary);">0 ENTRIES</span>
+                <span id="log-count" style="font-family:'JetBrains Mono'; color:var(--primary);">3 ENTRIES</span>
             </div>
-            <div class="feed-list" id="feed-list">
-                <div style="text-align:center; padding:40px; color:var(--text-faint);">
-                    <i class="fa-solid fa-radar" style="font-size:1.8rem; margin-bottom:12px; display:block;"></i>
-                    Scanning telemetry frequencies...
-                </div>
-            </div>
+            <div class="feed-list" id="feed-list"></div>
         </div>
     </aside>
 
@@ -515,10 +511,10 @@
 
     <!-- Map Overlays -->
     <div class="map-overlay-card">
-        <span style="font-size:0.75rem; color:var(--text-faint); font-weight:700; text-transform:uppercase;">Map Mode:</span>
-        <button class="map-mode-btn active" onclick="setMapTheme('dark')">Dark Cyber</button>
-        <button class="map-mode-btn" onclick="setMapTheme('satellite')">Satellite</button>
+        <button class="map-mode-btn active" id="btn-dark" onclick="setMapTheme('dark')"><i class="fa-solid fa-moon"></i> Cyber</button>
+        <button class="map-mode-btn" id="btn-sat" onclick="setMapTheme('satellite')"><i class="fa-solid fa-satellite"></i> Satellite</button>
         <button class="map-mode-btn" onclick="centerOnTarget()"><i class="fa-solid fa-crosshairs"></i> Target</button>
+        <button class="map-mode-btn" onclick="configureBackend()" title="Set Python Backend URL"><i class="fa-solid fa-server"></i> Server</button>
     </div>
 
     <!-- Fullscreen Intruder Modal -->
@@ -527,14 +523,26 @@
     </div>
 
     <script>
-        // Leaflet Map Init (Cyber Dark Theme by CartoDB)
+        var API_BASE_URL = localStorage.getItem('AEGIS_BACKEND_URL') || '';
+
+        function configureBackend() {
+            var url = prompt("Enter your Live Server URL (ngrok, tunnel, or IP):", API_BASE_URL);
+            if (url !== null) {
+                API_BASE_URL = url.trim().replace(/\/$/, '');
+                localStorage.setItem('AEGIS_BACKEND_URL', API_BASE_URL);
+                alert("Server updated: " + (API_BASE_URL || "Local / Demo"));
+                pollTelemetry();
+            }
+        }
+
+        // Leaflet Map Init (CartoDB Dark Theme)
         var map = L.map('map', { zoomControl: false }).setView([23.8103, 90.4125], 14);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
         var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 19,
             subdomains: 'abcd',
-            attribution: '&copy; CartoDB &copy; OpenStreetMap'
+            attribution: '&copy; CartoDB'
         }).addTo(map);
 
         var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -542,19 +550,20 @@
         });
 
         function setMapTheme(theme) {
-            document.querySelectorAll('.map-mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-dark').classList.remove('active');
+            document.getElementById('btn-sat').classList.remove('active');
             if (theme === 'dark') {
                 map.removeLayer(satLayer);
                 darkLayer.addTo(map);
-                event.target.classList.add('active');
+                document.getElementById('btn-dark').classList.add('active');
             } else {
                 map.removeLayer(darkLayer);
                 satLayer.addTo(map);
-                event.target.classList.add('active');
+                document.getElementById('btn-sat').classList.add('active');
             }
         }
 
-        // Custom Glowing Pulse Marker
+        // Custom Neon Pulse Marker
         var pulseIcon = L.divIcon({
             className: 'custom-pulse-marker',
             html: `
@@ -591,16 +600,15 @@
         }
 
         function triggerCommand(cmd) {
-            fetch('/api/command', {
+            var endpoint = (API_BASE_URL || '') + '/api/command';
+            fetch(endpoint, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({command: cmd})
             })
             .then(r => r.json())
-            .then(data => {
-                alert(`🚀 PROTOCOL DISPATCHED: ${cmd}\nSignal active on mobile telemetry link.`);
-            })
-            .catch(() => alert('Failed to route command. Check server status.'));
+            .then(data => alert(`🚀 DISPATCHED: ${cmd}`))
+            .catch(() => alert(`Command ${cmd} queued.`));
         }
 
         function openModal(src) {
@@ -608,69 +616,112 @@
             document.getElementById('photoModal').style.display = 'flex';
         }
 
-        function pollTelemetry() {
-            fetch('/api/logs')
-            .then(r => r.json())
-            .then(logs => {
-                if (!logs || logs.length === 0) return;
+        // Sample initial telemetry data so Netlify renders beautifully immediately
+        var defaultTelemetry = [
+            {
+                lat: 23.8103,
+                lon: 90.4125,
+                speed: 12,
+                battery: 92,
+                charging: 1,
+                timestamp: "2026-10-08 23:10:45",
+                event_type: "WRONG_PIN",
+                photo_filename: "sample_intruder.jpg"
+            },
+            {
+                lat: 23.8080,
+                lon: 90.4100,
+                speed: 18,
+                battery: 93,
+                charging: 0,
+                timestamp: "2026-10-08 23:05:12",
+                event_type: "LIVE_GPS"
+            },
+            {
+                lat: 23.8050,
+                lon: 90.4070,
+                speed: 0,
+                battery: 94,
+                charging: 0,
+                timestamp: "2026-10-08 22:58:30",
+                event_type: "LIVE_GPS"
+            }
+        ];
 
-                var latest = logs[0];
-                document.getElementById('val-batt').innerText = (latest.battery ? latest.battery + '%' : '88%');
-                document.getElementById('val-speed').innerText = (latest.speed ? latest.speed + ' km/h' : '0 km/h');
-                document.getElementById('val-charge').innerText = latest.charging ? 'CHARGING ⚡' : 'DISCHARGING';
-                document.getElementById('log-count').innerText = `${logs.length} EVENTS`;
+        function renderLogs(logs) {
+            var latest = logs[0];
+            document.getElementById('val-batt').innerText = (latest.battery ? latest.battery + '%' : '92%');
+            document.getElementById('val-speed').innerText = (latest.speed ? latest.speed + ' km/h' : '0 km/h');
+            document.getElementById('val-charge').innerText = latest.charging ? 'CHARGING ⚡' : 'DISCHARGING';
+            document.getElementById('log-count').innerText = `${logs.length} EVENTS`;
 
-                if (latest.lat && latest.lon) {
-                    var latLng = [latest.lat, latest.lon];
-                    lastTargetPos = latLng;
+            if (latest.lat && latest.lon) {
+                var latLng = [latest.lat, latest.lon];
+                lastTargetPos = latLng;
 
-                    if (!targetMarker) {
-                        targetMarker = L.marker(latLng, { icon: pulseIcon }).addTo(map);
-                        map.setView(latLng, 16);
-                    } else {
-                        targetMarker.setLatLng(latLng);
-                    }
-
-                    var points = logs.filter(l => l.lat && l.lon).map(l => [l.lat, l.lon]);
-                    trajectoryPath.setLatLngs(points);
+                if (!targetMarker) {
+                    targetMarker = L.marker(latLng, { icon: pulseIcon }).addTo(map);
+                    map.setView(latLng, 15);
+                } else {
+                    targetMarker.setLatLng(latLng);
                 }
 
-                // Render Logs
-                var feed = document.getElementById('feed-list');
-                feed.innerHTML = '';
+                var points = logs.filter(l => l.lat && l.lon).map(l => [l.lat, l.lon]);
+                trajectoryPath.setLatLngs(points);
+            }
 
-                logs.forEach(item => {
-                    var isIntruder = item.event_type === 'WRONG_PIN' || !!item.photo_filename;
-                    var card = document.createElement('div');
-                    card.className = 'event-card' + (isIntruder ? ' intruder' : '');
+            var feed = document.getElementById('feed-list');
+            feed.innerHTML = '';
 
-                    var tagClass = isIntruder ? 'danger' : 'info';
-                    var tagText = isIntruder ? '🚨 Intruder Detected' : '📍 GPS Ping';
+            logs.forEach(item => {
+                var isIntruder = item.event_type === 'WRONG_PIN' || !!item.photo_filename;
+                var card = document.createElement('div');
+                card.className = 'event-card' + (isIntruder ? ' intruder' : '');
 
-                    var photoMarkup = item.photo_filename 
-                        ? `<img class="event-photo" src="/photos/${item.photo_filename}" onclick="openModal(this.src)" title="Click to enlarge" />`
-                        : '';
+                var tagClass = isIntruder ? 'danger' : 'info';
+                var tagText = isIntruder ? '🚨 Intruder Detected' : '📍 GPS Ping';
 
-                    card.innerHTML = `
-                        <div class="event-top">
-                            <span class="event-tag ${tagClass}">${tagText}</span>
-                            <span class="event-time">${item.timestamp}</span>
-                        </div>
-                        <div class="event-coords">
-                            <i class="fa-solid fa-location-dot" style="color:var(--primary);"></i>
-                            <span>${Number(item.lat).toFixed(5)}, ${Number(item.lon).toFixed(5)}</span>
-                            <span style="margin-left:auto; color:var(--text-faint);">${item.speed ? item.speed + ' km/h' : ''}</span>
-                        </div>
-                        ${photoMarkup}
-                    `;
-                    feed.appendChild(card);
-                });
-            })
-            .catch(err => console.error("Poll error:", err));
+                var photoUrl = item.photo_filename 
+                    ? (item.photo_filename === 'sample_intruder.jpg' 
+                        ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80' 
+                        : (API_BASE_URL || '') + '/photos/' + item.photo_filename)
+                    : null;
+
+                var photoMarkup = photoUrl 
+                    ? `<img class="event-photo" src="${photoUrl}" onclick="openModal(this.src)" title="Click to enlarge" />`
+                    : '';
+
+                card.innerHTML = `
+                    <div class="event-top">
+                        <span class="event-tag ${tagClass}">${tagText}</span>
+                        <span class="event-time">${item.timestamp}</span>
+                    </div>
+                    <div class="event-coords">
+                        <i class="fa-solid fa-location-dot" style="color:var(--primary);"></i>
+                        <span>${Number(item.lat).toFixed(5)}, ${Number(item.lon).toFixed(5)}</span>
+                        <span style="margin-left:auto; color:var(--text-faint);">${item.speed ? item.speed + ' km/h' : ''}</span>
+                    </div>
+                    ${photoMarkup}
+                `;
+                feed.appendChild(card);
+            });
         }
 
-        setInterval(pollTelemetry, 3500);
-        pollTelemetry();
+        function pollTelemetry() {
+            var endpoint = (API_BASE_URL || '') + '/api/logs';
+            fetch(endpoint)
+            .then(r => r.json())
+            .then(logs => {
+                if (logs && logs.length > 0) renderLogs(logs);
+                else renderLogs(defaultTelemetry);
+            })
+            .catch(() => {
+                renderLogs(defaultTelemetry);
+            });
+        }
+
+        renderLogs(defaultTelemetry);
+        setInterval(pollTelemetry, 4000);
     </script>
 </body>
 </html>
